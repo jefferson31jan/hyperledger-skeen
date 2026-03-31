@@ -119,7 +119,30 @@ public class BFTProxy {
         BFTCommon.init(crypto);
         
         ECDSAKeyLoader loader = new ECDSAKeyLoader(frontendID, configDir, crypto.getProperties().getProperty(Config.SIGNATURE_ALGORITHM));
-        sysProxy = new ProxyReplyListener(frontendID, configDir, loader, Security.getProvider("BC"));        
+        // SKEEN: inicializar antes do ProxyReplyListener (que bloqueia)
+        boolean useskeen = System.getenv("SKEEN_SHARD_ID") != null;
+        if (useskeen) {
+            try {
+                String shardId = System.getenv("SKEEN_SHARD_ID");
+                bft.skeen.SkeenOrderingNode skeenNode =
+                    new bft.skeen.SkeenOrderingNode(shardId, configDir);
+                java.util.Set<String> allShards = new java.util.HashSet<>();
+                java.util.Properties skeenProps = new java.util.Properties();
+                skeenProps.load(new java.io.FileInputStream(configDir + "skeen.config"));
+                for (String key : skeenProps.stringPropertyNames()) {
+                    if (key.endsWith(".host")) {
+                        allShards.add(key.replace("shard.", "").replace(".host", ""));
+                    }
+                }
+                bft.skeen.SkeenProxy.getInstance().init(skeenNode, allShards);
+                BFTProxy.logger.info("Skeen ativo — shard=" + shardId);
+            } catch (Exception e) {
+                BFTProxy.logger.error("Falha ao inicializar SkeenOrderingNode", e);
+                System.exit(1);
+            }
+        } else {
+            sysProxy = new ProxyReplyListener(frontendID, configDir, loader, Security.getProvider("BC"));
+        }        
         
         try {
             
@@ -328,29 +351,8 @@ public class BFTProxy {
 
                     logger.debug("Received envelope" + Arrays.toString(env) + " for channel id " + channelID + (isConfig ? " (type config)" : " (type normal)"));
 
-                    this.out.invokeAsynchRequest(BFTCommon.serializeRequest(this.id, (isConfig ? "CONFIG" : "REGULAR"), channelID, env), new ReplyListener(){
-
-                        private int replies = 0;
-
-                        @Override
-                        public void reset() {
-
-                            replies = 0;
-                        }
-
-                        @Override
-                        public void replyReceived(RequestContext rc, TOMMessage tomm) {
-
-                            if (Arrays.equals(tomm.getContent(), "ACK".getBytes())) replies++;
-
-                            double q = Math.ceil((double) (out.getViewManager().getCurrentViewN() + out.getViewManager().getCurrentViewF() + 1) / 2.0);
-
-                            if (replies >= q) {
-                                    out.cleanAsynchRequest(rc.getOperationId());
-                            }
-                        }
-
-                    }, TOMMessageType.ORDERED_REQUEST);
+                    // SKEEN: envia envelope ao SkeenOrderingNode em vez do BFT-SMaRt
+                    bft.skeen.SkeenProxy.getInstance().submitEnvelope(env, channelID, isConfig);
                 
                 
                 } catch (IOException ex) {
@@ -393,7 +395,13 @@ public class BFTProxy {
 
             while (true) {
 
-                Map.Entry<String,Common.Block> reply = sysProxy.getNext();
+                Map.Entry<String,Common.Block> reply = null;
+                try {
+                    reply = bft.skeen.SkeenBlockQueue.getInstance().getNext();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    continue;
+                }
                 
                 logger.info("Received block # " + reply.getValue().getHeader().getNumber());
                 
