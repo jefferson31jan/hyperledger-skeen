@@ -178,7 +178,9 @@ public class BFTProxy {
             BatchTimeout = new TreeMap<>();
                         
             // request latest reply sequence from the ordering nodes
-            sysProxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(sysProxy.getViewManager().getStaticConf().getPrivateKey(), frontendID, "SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
+            if (sysProxy != null) {
+                sysProxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(sysProxy.getViewManager().getStaticConf().getPrivateKey(), frontendID, "SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
+            }
                                    
             new SenderThread().start();
                         
@@ -307,7 +309,9 @@ public class BFTProxy {
             this.id = id;
             this.recv = recv;
             this.input = new DataInputStream(this.recv.getInputStream());
-                        
+
+            // SKEEN: só cria AsynchServiceProxy se não estiver usando Skeen
+            if (System.getenv("SKEEN_SHARD_ID") == null) {
             this.out = new AsynchServiceProxy(this.id, configDir, new KeyLoader() {
                 @Override
                 public PublicKey loadPublicKey(int i) throws IOException, NoSuchAlgorithmException, InvalidKeySpecException, CertificateException {
@@ -330,6 +334,7 @@ public class BFTProxy {
                 }
                 
             }, Security.getProvider("BC"));
+            } // fim if SKEEN_SHARD_ID == null
             
         }
         
@@ -337,7 +342,30 @@ public class BFTProxy {
             
             String channelID;
             boolean isConfig;
-            byte[] env; 
+            byte[] env;
+
+            // SKEEN: se Skeen ativo, iniciar thread que consome da SkeenDeliveryQueue
+            if (System.getenv("SKEEN_SHARD_ID") != null) {
+                new Thread(() -> {
+                    while (true) {
+                        try {
+                            java.util.Map.Entry<String, byte[]> entry =
+                                bft.skeen.SkeenDeliveryQueue.getInstance().take();
+                            String cid = entry.getKey();
+                            byte[] payload = entry.getValue();
+                            logger.info("SkeenDeliveryQueue -> enviando ao BFTNode canal={}", cid);
+                            // serializar e enviar ao BFTNode via AsynchServiceProxy
+                            // (out é null quando Skeen ativo, criamos um proxy temporário)
+                            // Por ora: logar apenas — integração completa na próxima etapa
+                            logger.info("Envelope canal={} pronto para BFTNode ({} bytes)", cid, payload.length);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    }
+                }, "skeen-delivery").start();
+            }
+
             while (true) {
                 
 
@@ -461,8 +489,10 @@ public class BFTProxy {
         public void run() {
             
             try {
-                int reqId = sysProxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(sysProxy.getViewManager().getStaticConf().getPrivateKey(), frontendID, "TIMEOUT", this.channel,new byte[0]), null, TOMMessageType.ORDERED_REQUEST);
-                sysProxy.cleanAsynchRequest(reqId);
+                if (sysProxy != null) {
+                    int reqId = sysProxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(sysProxy.getViewManager().getStaticConf().getPrivateKey(), frontendID, "TIMEOUT", this.channel,new byte[0]), null, TOMMessageType.ORDERED_REQUEST);
+                    sysProxy.cleanAsynchRequest(reqId);
+                }
                 
                 Timer timer = new Timer();
                 timer.schedule(new BatchTimeout(this.channel), (BatchTimeout.get(channel) / 1000000));

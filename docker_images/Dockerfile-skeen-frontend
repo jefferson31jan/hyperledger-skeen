@@ -1,0 +1,6 @@
+FROM bftsmart/fabric-frontend:amd64-1.3.0
+
+COPY dist/BFT-Proxy.jar /etc/bftsmart-orderer/bin/orderingservice.jar
+COPY config/skeen.config /etc/bftsmart-orderer/config/skeen.config
+COPY docker_images/startSkeenFrontend.sh /etc/bftsmart-orderer/startFrontend.sh
+RUN chmod +x /etc/bftsmart-orderer/startFrontend.sh

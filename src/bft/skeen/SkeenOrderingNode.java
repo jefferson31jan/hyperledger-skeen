@@ -30,16 +30,48 @@ public class SkeenOrderingNode {
 
         this.blockCutter = BlockCutter.getInstance();
 
+        // Inicializar BlockCutter lendo o genesis block do canal do sistema
+        try {
+            java.io.File genesisFile = new java.io.File(configDir + "genesisblock");
+            if (genesisFile.exists()) {
+                org.hyperledger.fabric.protos.common.Common.Block genesis =
+                    org.hyperledger.fabric.protos.common.Common.Block.parseFrom(
+                        java.nio.file.Files.readAllBytes(genesisFile.toPath()));
+                org.hyperledger.fabric.protos.common.Configtx.ConfigEnvelope conf =
+                    bft.util.BFTCommon.extractConfigEnvelope(genesis);
+                org.hyperledger.fabric.protos.orderer.Configuration.BatchSize batchSize =
+                    bft.util.BFTCommon.extractBachSize(conf.getConfig());
+                org.hyperledger.fabric.protos.common.Common.ChannelHeader chanHeader =
+                    org.hyperledger.fabric.protos.common.Common.ChannelHeader.parseFrom(
+                        org.hyperledger.fabric.protos.common.Common.Payload.parseFrom(
+                            org.hyperledger.fabric.protos.common.Common.Envelope.parseFrom(
+                                genesis.getData().getData(0)).getPayload())
+                        .getHeader().getChannelHeader());
+                String sysChannel = chanHeader.getChannelId();
+                this.blockCutter.setBatchParms(sysChannel,
+                    batchSize.getPreferredMaxBytes(), batchSize.getMaxMessageCount());
+                logger.info("BlockCutter inicializado — canal={} preferredMaxBytes={} maxMsgCount={}",
+                    sysChannel, batchSize.getPreferredMaxBytes(), batchSize.getMaxMessageCount());
+            } else {
+                logger.warn("Genesis block não encontrado em {}", configDir + "genesisblock");
+                // fallback: usar valores padrão do Fabric
+                this.blockCutter.setBatchParms("bftchannel", 512 * 1024L, 10L);
+                this.blockCutter.setBatchParms("channel47",  512 * 1024L, 10L);
+            }
+        } catch (Exception e) {
+            logger.error("Falha ao inicializar BlockCutter com genesis", e);
+            this.blockCutter.setBatchParms("bftchannel", 512 * 1024L, 10L);
+            this.blockCutter.setBatchParms("channel47",  512 * 1024L, 10L);
+        }
+
         SkeenNode.DeliveryHandler onDeliver = (msgId, payload, channelId) -> {
-            logger.debug("Skeen entregou msgId={} canal={}", msgId, channelId);
+            logger.info("Skeen entregou msgId={} canal={} — repassando ao BFTNode via AsynchServiceProxy", msgId, channelId);
             try {
-                List<byte[][]> batches = blockCutter.ordered(channelId, payload, false);
-                if (!batches.isEmpty()) {
-                    logger.info("Bloco gerado com {} batches para canal {}",
-                        batches.size(), channelId);
-                }
+                // Após ordenação pelo Skeen, enviar ao BFTNode via AsynchServiceProxy
+                // O BFTNode gera o bloco e coloca na SkeenBlockQueue
+                bft.skeen.SkeenDeliveryQueue.getInstance().put(channelId, payload);
             } catch (Exception e) {
-                logger.error("Erro ao processar envelope", e);
+                logger.error("Erro ao enfileirar envelope entregue pelo Skeen", e);
             }
         };
 

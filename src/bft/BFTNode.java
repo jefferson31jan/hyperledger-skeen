@@ -74,6 +74,8 @@ import org.hyperledger.fabric.sdk.helper.Config;
 public class BFTNode extends DefaultRecoverable {
 
     private static String configDir;
+    private static BFTNode instance = null;
+    public static BFTNode getInstance() { return instance; }
 
     private final int id;
     private final CryptoPrimitives crypto;
@@ -148,6 +150,7 @@ public class BFTNode extends DefaultRecoverable {
         ident = BFTCommon.getSerializedIdentity(mspid, serializedCert);        
         
         this.logger = LoggerFactory.getLogger(BFTNode.class);
+        instance = this;
         this.loggerThroughput = LoggerFactory.getLogger("throughput");
 
         this.queue = new LinkedBlockingQueue<>();
@@ -461,7 +464,7 @@ public class BFTNode extends DefaultRecoverable {
         }
     }
     
-    private byte[] executeSingle(byte[] command, MessageContext msgCtx, boolean fromConsensus) {
+    public byte[] executeSingle(byte[] command, MessageContext msgCtx, boolean fromConsensus) {
             
         //make sure system channel is created, since we cannot do it at start up due to not having a timestamp yet
         //this is only done once
@@ -979,6 +982,17 @@ public class BFTNode extends DefaultRecoverable {
                         }
                         
                         replica.getServerCommunicationSystem().send(array, reply);
+
+                        // SKEEN: colocar bloco na fila para o SenderThread do BFTProxy
+                        try {
+                            bft.skeen.SkeenBlockQueue.getInstance().put(
+                                tuple.channelID,
+                                tuple.config,
+                                tuple.block
+                            );
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
 
                     }
 
