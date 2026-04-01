@@ -1,0 +1,35 @@
+-- Using view stored on disk
+-- Diffie-Hellman complete with 0
+-- Diffie-Hellman complete with 1
+-- ID = 2
+-- N = 4
+-- F = 1
+-- Port = 11020
+-- requestTimeout = 5000
+-- maxBatch = 400
+-- Binded replica to IP address 127.0.0.1
+-- In current view: ID:0; F:1; Processes:0(/127.0.0.1:11000),1(/127.0.0.1:11010),2(/127.0.0.1:11020),3(/127.0.0.1:11030),
+-- Replica state is up to date
+-- Retrieving State
+-- Ready to process operations
+-- Diffie-Hellman complete with 3
+-- Session Created, active clients=0
+-- Session Created, active clients=0
+-- Removing client channel with ID= 1000
+-- Active clients=1
+-- Removing client channel with ID= 1001
+-- Active clients=0
+-- Session Created, active clients=0
+-- Session Created, active clients=1
+-- Removing client channel with ID= 1001
+-- Active clients=1
+-- Removing client channel with ID= 1000
+-- Active clients=0
+-- Session Created, active clients=0
+-- Session Created, active clients=1
+-- Removing client channel with ID= 1001
+-- Active clients=1
+-- Removing client channel with ID= 1000
+-- Active clients=0
+-- Session Created, active clients=0
+-- Session Created, active clients=0

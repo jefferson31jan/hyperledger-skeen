@@ -1,0 +1,7 @@
+17:05:52.324 [main] INFO bft.util.BlockCutter - Updated PreferredMaxBytes: {bftchannel=524288}
+17:05:52.325 [main] INFO bft.util.BlockCutter - Updated MaxMessageCount: {bftchannel=10}
+17:05:52.325 [main] INFO bft.skeen.SkeenOrderingNode - BlockCutter inicializado — canal=bftchannel preferredMaxBytes=524288 maxMsgCount=10
+17:05:52.329 [main] INFO bft.skeen.SkeenOrderingNode - Peer: ShardA -> localhost:12000
+17:05:52.331 [main] INFO bft.skeen.SkeenOrderingNode - SkeenOrderingNode pronto — shard=ShardB porta=12001
+17:05:52.332 [skeen-accept] INFO bft.skeen.SkeenNetwork - Skeen ouvindo na porta 12001
+17:05:52.336 [skeen-conn-ShardA] INFO bft.skeen.SkeenNetwork - Conectado ao shard ShardA

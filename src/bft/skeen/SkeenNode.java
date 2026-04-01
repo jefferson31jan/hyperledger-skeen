@@ -42,6 +42,7 @@ public class SkeenNode {
     }
 
     public synchronized void onReceiveStart(SkeenMsg msg) {
+        firstSeen.putIfAbsent(msg.msgId, System.currentTimeMillis());
         logger.info("[{}] recebeu START msgId={} de={}", shardId, msg.msgId, msg.fromShard);
         if (msg.dest != null && !destMap.containsKey(msg.msgId)) {
             destMap.put(msg.msgId, new HashSet<>(msg.dest));
@@ -104,6 +105,9 @@ public class SkeenNode {
         return id1.compareTo(id2);
     }
 
+    private static final long ORPHAN_TIMEOUT_MS = 10_000;
+    private final Map<String, Long> firstSeen = new ConcurrentHashMap<>();
+
     private void tryDeliver() {
         List<Map.Entry<String, Long>> candidates = new ArrayList<>(finalTs.entrySet());
         candidates.removeIf(e -> delivered.contains(e.getKey()));
@@ -122,12 +126,20 @@ public class SkeenNode {
                 .allMatch(e -> {
                     String mid2 = e.getKey();
                     long   lm2  = e.getValue();
-                    boolean result;
-                    if (finalTs.containsKey(mid2)) {
-                        result = compare(fm_final, mid_final, finalTs.get(mid2), mid2) < 0;
-                    } else {
-                        result = compare(fm_final, mid_final, lm2, mid2) < 0;
+                    if (!finalTs.containsKey(mid2)) {
+                        long age = System.currentTimeMillis()
+                            - firstSeen.getOrDefault(mid2, System.currentTimeMillis());
+                        if (age > ORPHAN_TIMEOUT_MS) {
+                            logger.warn("[{}] ignorando orfao msgId={} ({}ms sem finalTs)",
+                                shardId, mid2, age);
+                            return true;
+                        }
+                        boolean r = compare(fm_final, mid_final, lm2, mid2) < 0;
+                        if (!r) logger.warn("[{}] tryDeliver bloqueado: mid={} fm={} mid2={} lm2={} final2={}",
+                            shardId, mid_final, fm_final, mid2, lm2, finalTs.get(mid2));
+                        return r;
                     }
+                    boolean result = compare(fm_final, mid_final, finalTs.get(mid2), mid2) < 0;
                     if (!result) logger.warn("[{}] tryDeliver bloqueado: mid={} fm={} mid2={} lm2={} final2={}",
                         shardId, mid_final, fm_final, mid2, lm2, finalTs.get(mid2));
                     return result;

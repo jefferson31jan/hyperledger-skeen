@@ -458,7 +458,7 @@ public class BFTNode extends DefaultRecoverable {
                 try {
                     byte[] cmd = BFTCommon.serializeRequest(self.id, "REGULAR", channelId, payload);
                     bftsmart.tom.MessageContext ctx = new bftsmart.tom.MessageContext(
-                        0, 0, bftsmart.tom.core.messages.TOMMessageType.ORDERED_REQUEST,
+                        -1, 0, bftsmart.tom.core.messages.TOMMessageType.ORDERED_REQUEST,
                         0, 0, 0, 0, new byte[0], System.currentTimeMillis(),
                         0, 0L, 0, 0, 0, new java.util.HashSet<>(), null, false);
                     self.executeSingle(cmd, ctx, true);
@@ -518,7 +518,11 @@ public class BFTNode extends DefaultRecoverable {
                                 if (key.endsWith(".host"))
                                     dest.add(key.replace("shard.", "").replace(".host", ""));
                             }
-                            skeenNode.multicast(msgId, tuple.payload, tuple.channelID, dest);
+                            // guardar o tipo (CONFIG ou REGULAR) junto com o payload
+                            String msgType = tuple.type;
+                            String chanID  = tuple.channelID;
+                            byte[] envPayload = commands[i]; // guardar comando completo
+                            skeenNode.multicast(msgId, envPayload, chanID, dest);
                             replies[i] = "ACK".getBytes();
                             continue; // executeSingle será chamado pelo onDeliver
                         }
@@ -540,10 +544,12 @@ public class BFTNode extends DefaultRecoverable {
     private void waitforReplica() throws InterruptedException {
         
         while (replica == null) {
-                            
             replicaLock.lock();
-            replicaReady.await(1000, TimeUnit.MILLISECONDS);
-            replicaLock.lock();
+            try {
+                replicaReady.await(1000, TimeUnit.MILLISECONDS);
+            } finally {
+                replicaLock.unlock();
+            }
         }
     }
     

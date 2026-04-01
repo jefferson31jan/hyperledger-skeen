@@ -75,8 +75,8 @@ public class SkeenOrderingNode {
             }
         };
 
-        this.skeenNode = new SkeenNode(shardId, null, onDeliver);
-        this.network   = new SkeenNetwork(shardId, localPort, skeenNode);
+        this.network   = new SkeenNetwork(shardId, localPort, null);
+        this.skeenNode = new SkeenNode(shardId, this.network, onDeliver);
 
         for (String key : props.stringPropertyNames()) {
             if (key.endsWith(".host")) {
@@ -90,9 +90,7 @@ public class SkeenOrderingNode {
             }
         }
 
-        Field field = SkeenNode.class.getDeclaredField("net");
-        field.setAccessible(true);
-        field.set(skeenNode, network);
+        network.setNode(skeenNode);
 
         network.start();
         logger.info("SkeenOrderingNode pronto — shard={} porta={}", shardId, localPort);

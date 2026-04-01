@@ -25,6 +25,10 @@ public class SkeenNetwork implements SkeenNode.NetworkLayer {
         this.node         = node;
     }
 
+    public void setNode(SkeenNode node) {
+        this.node = node;
+    }
+
     public void addPeer(String shardId, String host, int port) {
         peers.put(shardId, new InetSocketAddress(host, port));
         pending.put(shardId, new ConcurrentLinkedQueue<>());
