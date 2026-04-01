@@ -664,6 +664,7 @@ public class BFTNode extends DefaultRecoverable {
                 }
             }
             
+            logger.info("SKEEN-DEBUG: processando envelope canal={} isConfig={}", tuple.channelID, isConfig);
             List<byte[][]> batches = blockCutter.ordered(tuple.channelID, tuple.payload, isConfig);
             
             if (batches.size() > 0) {

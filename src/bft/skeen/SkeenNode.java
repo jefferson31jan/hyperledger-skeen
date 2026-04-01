@@ -53,8 +53,15 @@ public class SkeenNode {
         }
         clock++;
         long ts = clock;
-        local.put(msg.msgId, ts);
-        logger.info("[{}] timestamp local={} para msgId={}", shardId, ts, msg.msgId);
+        // Só registrar em local[] se este shard tem o payload (iniciou ou recebeu via BFT)
+        // Mensagens de outros shards sem payload local não bloqueiam o tryDeliver
+        if (payloads.containsKey(msg.msgId)) {
+            local.put(msg.msgId, ts);
+            logger.info("[{}] timestamp local={} para msgId={}", shardId, ts, msg.msgId);
+        } else {
+            logger.info("[{}] timestamp local={} para msgId={} (sem payload local — não registra em local[])",
+                shardId, ts, msg.msgId);
+        }
         Set<String> dest = destMap.get(msg.msgId);
         SkeenMsg reply = new SkeenMsg(Type.LOCAL_TS, msg.msgId, shardId, ts);
         for (String d : dest) net.send(reply, d);
@@ -107,17 +114,23 @@ public class SkeenNode {
             String mid = entry.getKey();
             long   fm  = entry.getValue();
 
+            final long fm_final = fm;
+            final String mid_final = mid;
             boolean safe = local.entrySet().stream()
                 .filter(e -> !delivered.contains(e.getKey()))
-                .filter(e -> !e.getKey().equals(mid))
+                .filter(e -> !e.getKey().equals(mid_final))
                 .allMatch(e -> {
                     String mid2 = e.getKey();
                     long   lm2  = e.getValue();
+                    boolean result;
                     if (finalTs.containsKey(mid2)) {
-                        return compare(fm, mid, finalTs.get(mid2), mid2) < 0;
+                        result = compare(fm_final, mid_final, finalTs.get(mid2), mid2) < 0;
                     } else {
-                        return compare(fm, mid, lm2, mid2) < 0;
+                        result = compare(fm_final, mid_final, lm2, mid2) < 0;
                     }
+                    if (!result) logger.warn("[{}] tryDeliver bloqueado: mid={} fm={} mid2={} lm2={} final2={}",
+                        shardId, mid_final, fm_final, mid2, lm2, finalTs.get(mid2));
+                    return result;
                 });
 
             if (safe) {

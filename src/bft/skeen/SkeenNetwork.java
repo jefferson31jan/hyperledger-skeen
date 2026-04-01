@@ -7,24 +7,17 @@ import java.util.concurrent.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Camada de rede do Skeen — TCP simples entre shards.
- * Cada shard abre um ServerSocket para receber mensagens
- * e cria conexões de saída para os outros shards.
- */
 public class SkeenNetwork implements SkeenNode.NetworkLayer {
 
     private final Logger logger = LoggerFactory.getLogger(SkeenNetwork.class);
 
     private final String localShardId;
     private final int    listenPort;
-    private final SkeenNode node;
+    private SkeenNode node;
 
-    // shardId -> host:porta dos outros shards
-    private final Map<String, InetSocketAddress> peers = new ConcurrentHashMap<>();
-
-    // shardId -> conexão de saída
-    private final Map<String, PrintWriter> outConns = new ConcurrentHashMap<>();
+    private final Map<String, InetSocketAddress>       peers    = new ConcurrentHashMap<>();
+    private final Map<String, PrintWriter>             outConns = new ConcurrentHashMap<>();
+    private final Map<String, Queue<SkeenNode.SkeenMsg>> pending = new ConcurrentHashMap<>();
 
     public SkeenNetwork(String localShardId, int listenPort, SkeenNode node) {
         this.localShardId = localShardId;
@@ -32,45 +25,63 @@ public class SkeenNetwork implements SkeenNode.NetworkLayer {
         this.node         = node;
     }
 
-    // Registrar endereço de um shard remoto
     public void addPeer(String shardId, String host, int port) {
         peers.put(shardId, new InetSocketAddress(host, port));
+        pending.put(shardId, new ConcurrentLinkedQueue<>());
     }
 
-    // Iniciar servidor de escuta e threads de conexão
     public void start() {
-        // Thread que aceita conexões de entrada
         new Thread(this::acceptLoop, "skeen-accept").start();
-        // Conectar aos peers em background
         new Thread(this::connectToPeers, "skeen-connect").start();
     }
 
-    // ── envio (NetworkLayer) ─────────────────────────────────────────────────
     @Override
     public void send(SkeenNode.SkeenMsg msg, String toShardId) {
-        // Se destino é o próprio shard, entrega direto (loopback)
         if (toShardId.equals(localShardId)) {
             node.receive(msg);
             return;
         }
-
         PrintWriter out = outConns.get(toShardId);
         if (out == null) {
-            logger.warn("Sem conexão com shard {}, descartando mensagem", toShardId);
+            // Enfileirar para envio posterior
+            Queue<SkeenNode.SkeenMsg> q = pending.computeIfAbsent(
+                toShardId, k -> new ConcurrentLinkedQueue<>());
+            q.add(msg);
+            logger.warn("Sem conexão com shard {} — mensagem enfileirada (total={})",
+                toShardId, q.size());
             return;
         }
+        doSend(out, msg, toShardId);
+    }
 
-        // Formato: TYPE|msgId|fromShard|ts|dest1,dest2,...
+    private void doSend(PrintWriter out, SkeenNode.SkeenMsg msg, String toShardId) {
         String destStr = msg.dest != null ? String.join(",", msg.dest) : "";
         String line = msg.type.name() + "|" + msg.msgId + "|"
                     + msg.fromShard + "|" + msg.ts + "|" + destStr;
         synchronized (out) {
             out.println(line);
             out.flush();
+            if (out.checkError()) {
+                logger.warn("Erro ao enviar para shard {}", toShardId);
+                outConns.remove(toShardId);
+            }
         }
     }
 
-    // ── servidor TCP ─────────────────────────────────────────────────────────
+    private void flushPending(String shardId) {
+        Queue<SkeenNode.SkeenMsg> q = pending.get(shardId);
+        if (q == null || q.isEmpty()) return;
+        PrintWriter out = outConns.get(shardId);
+        if (out == null) return;
+        int count = 0;
+        SkeenNode.SkeenMsg msg;
+        while ((msg = q.poll()) != null) {
+            doSend(out, msg, shardId);
+            count++;
+        }
+        if (count > 0) logger.info("Enviadas {} mensagens pendentes para shard {}", count, shardId);
+    }
+
     private void acceptLoop() {
         try (ServerSocket server = new ServerSocket(listenPort)) {
             logger.info("Skeen ouvindo na porta {}", listenPort);
@@ -96,13 +107,10 @@ public class SkeenNetwork implements SkeenNode.NetworkLayer {
         }
     }
 
-    // ── cliente TCP ──────────────────────────────────────────────────────────
     private void connectToPeers() {
         for (Map.Entry<String, InetSocketAddress> entry : peers.entrySet()) {
             String shardId = entry.getKey();
             InetSocketAddress addr = entry.getValue();
-
-            // tentar conectar com retry
             new Thread(() -> {
                 while (true) {
                     try {
@@ -110,17 +118,20 @@ public class SkeenNetwork implements SkeenNode.NetworkLayer {
                         PrintWriter out = new PrintWriter(sock.getOutputStream(), true);
                         outConns.put(shardId, out);
                         logger.info("Conectado ao shard {}", shardId);
-                        break;
+                        flushPending(shardId);
+                        // monitorar desconexão
+                        try { sock.getInputStream().read(); } catch (IOException e) {}
+                        outConns.remove(shardId);
+                        logger.warn("Desconectado do shard {} — tentando reconectar", shardId);
                     } catch (IOException e) {
                         logger.warn("Aguardando shard {}...", shardId);
-                        try { Thread.sleep(2000); } catch (InterruptedException ie) { break; }
+                        try { Thread.sleep(1000); } catch (InterruptedException ie) { break; }
                     }
                 }
             }, "skeen-conn-" + shardId).start();
         }
     }
 
-    // ── serialização ─────────────────────────────────────────────────────────
     private SkeenNode.SkeenMsg deserialize(String line) {
         try {
             String[] parts = line.split("\\|", -1);
@@ -128,12 +139,9 @@ public class SkeenNetwork implements SkeenNode.NetworkLayer {
             String         msgId     = parts[1];
             String         fromShard = parts[2];
             long           ts        = Long.parseLong(parts[3]);
-
             SkeenNode.SkeenMsg msg = new SkeenNode.SkeenMsg(type, msgId, fromShard, ts);
-
-            if (!parts[4].isEmpty()) {
+            if (!parts[4].isEmpty())
                 msg.dest = new HashSet<>(Arrays.asList(parts[4].split(",")));
-            }
             return msg;
         } catch (Exception e) {
             logger.error("Erro ao deserializar mensagem Skeen: {}", line, e);
