@@ -172,7 +172,6 @@ public class BFTNode extends DefaultRecoverable {
         logger.info("Starting up ordering node with system channel " + this.sysChannel);
         logger.info("This is the signature algorithm: " + this.crypto.getProperties().getProperty(Config.SIGNATURE_ALGORITHM));
         logger.info("This is the hash algorithm: " + this.crypto.getProperties().getProperty(Config.HASH_ALGORITHM));
-        
         this.mspManager = MSPManager.getInstance(mspid, sysChannel);
                 
         this.replica = new ServiceReplica(this.id, this.configDir, this, this, null,
@@ -439,15 +438,99 @@ public class BFTNode extends DefaultRecoverable {
         return new byte[0];
     }
 
+    // SKEEN: instância do SkeenNode para ordenação inter-shard
+    private bft.skeen.SkeenNode skeenNode = null;
+    private bft.skeen.SkeenNetwork skeenNet = null;
+
+    private void initSkeen() {
+        String shardId = System.getenv("SKEEN_SHARD_ID");
+        if (shardId == null || skeenNode != null) return;
+        try {
+            java.util.Properties props = new java.util.Properties();
+            props.load(new java.io.FileInputStream(this.configDir + "skeen.config"));
+
+            int port = Integer.parseInt(props.getProperty("shard." + shardId + ".port", "12000"));
+            skeenNet = new bft.skeen.SkeenNetwork(shardId, port, null);
+
+            // DeliveryHandler: envelope ordenado pelo Skeen → processar localmente
+            final BFTNode self = this;
+            bft.skeen.SkeenNode.DeliveryHandler onDeliver = (msgId, payload, channelId) -> {
+                try {
+                    byte[] cmd = BFTCommon.serializeRequest(self.id, "REGULAR", channelId, payload);
+                    bftsmart.tom.MessageContext ctx = new bftsmart.tom.MessageContext(
+                        0, 0, bftsmart.tom.core.messages.TOMMessageType.ORDERED_REQUEST,
+                        0, 0, 0, 0, new byte[0], System.currentTimeMillis(),
+                        0, 0L, 0, 0, 0, new java.util.HashSet<>(), null, false);
+                    self.executeSingle(cmd, ctx, true);
+                    logger.info("Skeen entregou e processou msgId=" + msgId + " canal=" + channelId);
+                } catch (Exception e) {
+                    logger.error("Erro no Skeen delivery", e);
+                }
+            };
+
+            skeenNode = new bft.skeen.SkeenNode(shardId, skeenNet, onDeliver);
+
+            java.lang.reflect.Field f = bft.skeen.SkeenNetwork.class.getDeclaredField("node");
+            f.setAccessible(true);
+            f.set(skeenNet, skeenNode);
+
+            for (String key : props.stringPropertyNames()) {
+                if (key.endsWith(".host")) {
+                    String sid = key.replace("shard.", "").replace(".host", "");
+                    if (sid.equals(shardId)) continue;
+                    String host = props.getProperty("shard." + sid + ".host");
+                    int    p    = Integer.parseInt(props.getProperty("shard." + sid + ".port", "12000"));
+                    skeenNet.addPeer(sid, host, p);
+                }
+            }
+            skeenNet.start();
+            logger.info("SkeenNode iniciado — shard=" + shardId + " porta=" + port);
+
+        } catch (Exception e) {
+            logger.error("Falha ao iniciar SkeenNode", e);
+        }
+    }
+
     @Override
     public byte[][] appExecuteBatch(byte[][] commands, MessageContext[] msgCtxs, boolean fromConsensus) {
+
+        // Inicializar Skeen na primeira execução (lazy)
+        initSkeen();
 
         byte[][] replies = new byte[commands.length][];
         for (int i = 0; i < commands.length; i++) {
             if (msgCtxs != null && msgCtxs[i] != null) {
 
+                if (skeenNode != null) {
+                    // SKEEN: extrair envelope e submeter ao multicast inter-shard
+                    try {
+                        BFTCommon.RequestTuple tuple = BFTCommon.deserializeRequest(commands[i]);
+                        // só submeter ao Skeen envelopes normais (não mensagens de controle)
+                        if (tuple != null && tuple.type != null
+                                && !tuple.type.equals("TIMEOUT")
+                                && !tuple.type.equals("SEQUENCE")
+                                && !tuple.type.equals("GETSVIEW")) {
+                            String msgId = java.util.UUID.randomUUID().toString();
+                            java.util.Set<String> dest = new java.util.HashSet<>();
+                            java.util.Properties props = new java.util.Properties();
+                            props.load(new java.io.FileInputStream(this.configDir + "skeen.config"));
+                            for (String key : props.stringPropertyNames()) {
+                                if (key.endsWith(".host"))
+                                    dest.add(key.replace("shard.", "").replace(".host", ""));
+                            }
+                            skeenNode.multicast(msgId, tuple.payload, tuple.channelID, dest);
+                            replies[i] = "ACK".getBytes();
+                            continue; // executeSingle será chamado pelo onDeliver
+                        }
+                    } catch (java.io.IOException e) {
+                        // mensagem de controle do BFT-SMaRt — processar normalmente
+                        logger.debug("Mensagem de controle, processando via executeSingle");
+                    } catch (Exception e) {
+                        logger.error("Erro ao submeter ao Skeen", e);
+                    }
+                }
+
                 replies[i] = executeSingle(commands[i], msgCtxs[i], fromConsensus);
-                
             }
         }
 
