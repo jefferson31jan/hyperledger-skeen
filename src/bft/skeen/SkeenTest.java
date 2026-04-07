@@ -16,7 +16,7 @@ public class SkeenTest {
         String[] msgs = { "msg-001", "msg-002", "msg-003" };
 
         for (String msgId : msgs) {
-            String line = "START|" + msgId + "|TestClient|0|ShardA,ShardB";
+            String line = "START|" + msgId + "|TestClient|0|ShardA,ShardB|bftchannel";
             System.out.println("Enviando para ShardA: " + line);
             outA.println(line);
             System.out.println("Enviando para ShardB: " + line);

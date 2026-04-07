@@ -1,7 +1,46 @@
-17:05:52.324 [main] INFO bft.util.BlockCutter - Updated PreferredMaxBytes: {bftchannel=524288}
-17:05:52.325 [main] INFO bft.util.BlockCutter - Updated MaxMessageCount: {bftchannel=10}
-17:05:52.325 [main] INFO bft.skeen.SkeenOrderingNode - BlockCutter inicializado — canal=bftchannel preferredMaxBytes=524288 maxMsgCount=10
-17:05:52.329 [main] INFO bft.skeen.SkeenOrderingNode - Peer: ShardA -> localhost:12000
-17:05:52.331 [main] INFO bft.skeen.SkeenOrderingNode - SkeenOrderingNode pronto — shard=ShardB porta=12001
-17:05:52.332 [skeen-accept] INFO bft.skeen.SkeenNetwork - Skeen ouvindo na porta 12001
-17:05:52.336 [skeen-conn-ShardA] INFO bft.skeen.SkeenNetwork - Conectado ao shard ShardA
+08:58:38.004 [main] INFO bft.util.BlockCutter - Updated PreferredMaxBytes: {bftchannel=524288}
+08:58:38.006 [main] INFO bft.util.BlockCutter - Updated MaxMessageCount: {bftchannel=10}
+08:58:38.006 [main] INFO bft.skeen.SkeenOrderingNode - BlockCutter inicializado — canal=bftchannel preferredMaxBytes=524288 maxMsgCount=10
+08:58:38.012 [main] INFO bft.skeen.SkeenOrderingNode - Peer: ShardA -> localhost:12000
+08:58:38.014 [main] INFO bft.skeen.SkeenOrderingNode - SkeenOrderingNode pronto — shard=ShardB porta=12001
+08:58:38.018 [skeen-accept] INFO bft.skeen.SkeenNetwork - Skeen ouvindo na porta 12001
+08:58:38.021 [skeen-conn-ShardA] INFO bft.skeen.SkeenNetwork - Conectado ao shard ShardA
+08:59:11.789 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] recebeu START msgId=msg-001 de=TestClient
+08:59:11.789 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] timestamp local=1 para msgId=msg-001 (sem payload local — não registra em local[])
+08:59:11.789 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] recebeu LOCAL_TS msgId=msg-001 de=ShardB ts=1
+08:59:11.790 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] LOCAL_TS recebidos=1 esperados=2 para msgId=msg-001
+08:59:11.791 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] recebeu LOCAL_TS msgId=msg-001 de=ShardA ts=1
+08:59:11.791 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] LOCAL_TS recebidos=2 esperados=2 para msgId=msg-001
+08:59:11.803 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] timestamp final=1 para msgId=msg-001
+08:59:11.805 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] recebeu ACK msgId=msg-001 de=ShardB
+08:59:11.805 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] ACKs recebidos=1 esperados=2 para msgId=msg-001
+08:59:11.806 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] recebeu ACK msgId=msg-001 de=ShardA
+08:59:11.806 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] ACKs recebidos=2 esperados=2 para msgId=msg-001
+08:59:11.810 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] *** ENTREGOU msgId=msg-001 finalTs=1 canal=bftchannel ***
+08:59:11.810 [skeen-read] INFO bft.skeen.SkeenOrderingNode - Skeen entregou msgId=msg-001 canal=bftchannel — repassando ao BFTNode via AsynchServiceProxy
+08:59:11.990 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] recebeu START msgId=msg-002 de=TestClient
+08:59:11.990 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] timestamp local=2 para msgId=msg-002 (sem payload local — não registra em local[])
+08:59:11.990 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] recebeu LOCAL_TS msgId=msg-002 de=ShardB ts=2
+08:59:11.991 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] LOCAL_TS recebidos=1 esperados=2 para msgId=msg-002
+08:59:11.991 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] recebeu LOCAL_TS msgId=msg-002 de=ShardA ts=2
+08:59:11.991 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] LOCAL_TS recebidos=2 esperados=2 para msgId=msg-002
+08:59:11.991 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] timestamp final=2 para msgId=msg-002
+08:59:11.991 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] recebeu ACK msgId=msg-002 de=ShardB
+08:59:11.991 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] ACKs recebidos=1 esperados=2 para msgId=msg-002
+08:59:11.991 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] recebeu ACK msgId=msg-002 de=ShardA
+08:59:11.991 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] ACKs recebidos=2 esperados=2 para msgId=msg-002
+08:59:11.992 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] *** ENTREGOU msgId=msg-002 finalTs=2 canal=bftchannel ***
+08:59:11.992 [skeen-read] INFO bft.skeen.SkeenOrderingNode - Skeen entregou msgId=msg-002 canal=bftchannel — repassando ao BFTNode via AsynchServiceProxy
+08:59:12.191 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] recebeu START msgId=msg-003 de=TestClient
+08:59:12.191 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] timestamp local=3 para msgId=msg-003 (sem payload local — não registra em local[])
+08:59:12.191 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] recebeu LOCAL_TS msgId=msg-003 de=ShardB ts=3
+08:59:12.191 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] LOCAL_TS recebidos=1 esperados=2 para msgId=msg-003
+08:59:12.191 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] recebeu LOCAL_TS msgId=msg-003 de=ShardA ts=3
+08:59:12.191 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] LOCAL_TS recebidos=2 esperados=2 para msgId=msg-003
+08:59:12.191 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] timestamp final=3 para msgId=msg-003
+08:59:12.192 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] recebeu ACK msgId=msg-003 de=ShardB
+08:59:12.192 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] ACKs recebidos=1 esperados=2 para msgId=msg-003
+08:59:12.192 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] recebeu ACK msgId=msg-003 de=ShardA
+08:59:12.192 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] ACKs recebidos=2 esperados=2 para msgId=msg-003
+08:59:12.192 [skeen-read] INFO bft.skeen.SkeenNode - [ShardB] *** ENTREGOU msgId=msg-003 finalTs=3 canal=bftchannel ***
+08:59:12.192 [skeen-read] INFO bft.skeen.SkeenOrderingNode - Skeen entregou msgId=msg-003 canal=bftchannel — repassando ao BFTNode via AsynchServiceProxy

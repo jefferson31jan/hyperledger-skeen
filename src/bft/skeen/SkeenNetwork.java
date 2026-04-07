@@ -60,8 +60,9 @@ public class SkeenNetwork implements SkeenNode.NetworkLayer {
 
     private void doSend(PrintWriter out, SkeenNode.SkeenMsg msg, String toShardId) {
         String destStr = msg.dest != null ? String.join(",", msg.dest) : "";
+        String chanStr = msg.channelId != null ? msg.channelId : "";
         String line = msg.type.name() + "|" + msg.msgId + "|"
-                    + msg.fromShard + "|" + msg.ts + "|" + destStr;
+                    + msg.fromShard + "|" + msg.ts + "|" + destStr + "|" + chanStr;
         synchronized (out) {
             out.println(line);
             out.flush();
@@ -144,8 +145,10 @@ public class SkeenNetwork implements SkeenNode.NetworkLayer {
             String         fromShard = parts[2];
             long           ts        = Long.parseLong(parts[3]);
             SkeenNode.SkeenMsg msg = new SkeenNode.SkeenMsg(type, msgId, fromShard, ts);
-            if (!parts[4].isEmpty())
+            if (parts.length > 4 && !parts[4].isEmpty())
                 msg.dest = new HashSet<>(Arrays.asList(parts[4].split(",")));
+            if (parts.length > 5 && !parts[5].isEmpty())
+                msg.channelId = parts[5];
             return msg;
         } catch (Exception e) {
             logger.error("Erro ao deserializar mensagem Skeen: {}", line, e);

@@ -38,6 +38,7 @@ public class SkeenNode {
         destMap.put(msgId, new HashSet<>(dest));
         SkeenMsg msg = new SkeenMsg(Type.START, msgId, shardId, 0);
         msg.dest = new HashSet<>(dest);
+        msg.channelId = channelId;
         for (String d : dest) net.send(msg, d);
     }
 
@@ -46,6 +47,9 @@ public class SkeenNode {
         logger.info("[{}] recebeu START msgId={} de={}", shardId, msg.msgId, msg.fromShard);
         if (msg.dest != null && !destMap.containsKey(msg.msgId)) {
             destMap.put(msg.msgId, new HashSet<>(msg.dest));
+        }
+        if (msg.channelId != null && !channels.containsKey(msg.msgId)) {
+            channels.put(msg.msgId, msg.channelId);
         }
         // Se não conhecemos o destino, não registrar em local[] para não bloquear tryDeliver
         if (destMap.get(msg.msgId) == null) {
@@ -172,6 +176,7 @@ public class SkeenNode {
         public String      fromShard;
         public long        ts;
         public Set<String> dest;
+        public String      channelId;
         public SkeenMsg(Type type, String msgId, String fromShard, long ts) {
             this.type = type; this.msgId = msgId;
             this.fromShard = fromShard; this.ts = ts;
